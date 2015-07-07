@@ -1,6 +1,6 @@
 (
 name:		"Require",
-summary:	"Node.js-style include of external .scd's",
+summary:	"Node.js-style inclusion of external .scd's",
 author:		"scott@artificia.org",
 copyright:	"Frank Scott Carver, 2013",
 license:	"MIT",
