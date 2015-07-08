@@ -1,3 +1,4 @@
+// UnitTestScript("Require", thisProcess.nowExecutingPath).runScript;
 {
 	|test|
 	var r1Result, r2Result, assertIdentical, assertNotIdentical;
