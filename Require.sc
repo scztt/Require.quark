@@ -31,17 +31,17 @@ Require {
 	}
 
 	*new {
+		arg identifier, cmdPeriod = false, always = true;
 		^this.require(identifier, cmdPeriod, always);
 	}
 
 	// A resolveRelative that always assumes the interpreter as parent.
 	*resolveRelative {
-		arg str;
-		var path = thisProcess.nowExecutingPath;
+		arg str, relativeTo;
 
 		if (str[0] == thisProcess.platform.pathSeparator) {^str};
-		if (path.isNil) { ^str }; // It's okay if path is nil, just always resolve absolutely.
-		^(path.dirname +/+ str)
+		if (relativeTo.isNil) { ^str }; // It's okay if relativeTo is nil, just always resolve absolutely.
+		^(relativeTo.asString +/+ str)
 	}
 
 	*pathMatch {
@@ -58,9 +58,9 @@ Require {
 		^File.realpath(PathName(path).asAbsolutePath().standardizePath).asSymbol();
 	}
 
-	*require {
-		arg identifier, cmdPeriod = false, always = false;
-		var paths, results, caller;
+	*resolvePaths {
+		|identifier, relativeTo|
+		var paths;
 
 		// Don't allow wildcard to be executed in a root directory.
 		if (identifier.contains(thisProcess.platform.pathSeparator).not
@@ -69,25 +69,43 @@ Require {
 			identifier = "." +/+ identifier;
 		};
 
+		if (identifier.contains("~")) {
+			identifier = identifier.standardizePath;
+		};
+
 		// First match as if an absolute path
 		paths = this.pathMatch(identifier);
 
 		// Then relative
 		if (paths.isEmpty()) {
-			paths = this.pathMatch(this.resolveRelative(identifier));
+			paths = this.pathMatch(this.resolveRelative(identifier, relativeTo));
 		};
 
 		// Then relative with implicit ./
 		if (paths.isEmpty() && (identifier[0] != ".")) {
 			identifier = "." +/+ identifier;
-			paths = this.pathMatch(this.resolveRelative(identifier));
+			paths = this.pathMatch(this.resolveRelative(identifier, relativeTo));
 		};
 
 		// Then relative with implicit extension
 		if (paths.isEmpty() && identifier.endsWith(".scd").not) {
 			identifier = identifier ++ ".scd";
-			paths = this.pathMatch(this.resolveRelative(identifier));
+			paths = this.pathMatch(this.resolveRelative(identifier, relativeTo));
 		};
+
+		^paths;
+	}
+
+	*require {
+		arg identifier, cmdPeriod = false, always = true;
+		var paths, results, caller;
+		var relativePath = thisProcess.nowExecutingPath ? "~";
+		relativePath = relativePath.asString;
+		if (relativePath.isFile) {
+			relativePath = relativePath.dirname;
+		};
+
+		paths = this.resolvePaths(identifier, relativePath);
 
 		if (paths.isEmpty) {
 			Exception("No files found for Require(%)! (executing from: %)".format(identifier, thisProcess.nowExecutingPath).warn).throw;
