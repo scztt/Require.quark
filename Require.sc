@@ -120,7 +120,7 @@ Require {
 
 				if (always or: {requireTable[requiredFile.path].isNil or:{ requireTable[requiredFile.path].mtime != requiredFile.mtime}}) {
 					oldPath = thisProcess.nowExecutingPath;
-					thisProcess.nowExecutingPath = requiredFile.path;
+					thisProcess.nowExecutingPath = requiredFile.path.asString;
 
 					protect {
 						func = thisProcess.interpreter.compileFile(requiredFile.path.asString);
