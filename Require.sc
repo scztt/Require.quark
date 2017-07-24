@@ -31,7 +31,6 @@ Require {
 	}
 
 	*new {
-		arg identifier, cmdPeriod = false, always = false;
 		^this.require(identifier, cmdPeriod, always);
 	}
 
