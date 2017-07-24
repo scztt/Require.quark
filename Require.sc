@@ -122,19 +122,21 @@ Require {
 					oldPath = thisProcess.nowExecutingPath;
 					thisProcess.nowExecutingPath = requiredFile.path;
 
-					try {
+					protect {
 						func = thisProcess.interpreter.compileFile(requiredFile.path.asString);
 						if (func.isNil) { Exception().throw() }; // failed to compile
 						requiredFile.result = func.value();
 						requireTable[requiredFile.path] = requiredFile;
 					} {
 						|e|
-						"Require of file % failed!".format(requiredFile.path).error;
-						requireTable[requiredFile.path] = nil;
-						e.throw();
-					};
 
-					thisProcess.nowExecutingPath = oldPath;
+						if (e.notNil) {
+							"Require of file % failed!".format(requiredFile.path).error;
+							requireTable[requiredFile.path] = nil;
+						};
+
+						thisProcess.nowExecutingPath = oldPath;
+					};
 
 					if (cmdPeriod) {
 						CmdPeriod.doOnce({
