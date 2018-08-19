@@ -101,7 +101,7 @@ Require {
 		var paths, results, caller;
 		var relativePath = thisProcess.nowExecutingPath ? "~";
 		relativePath = relativePath.asString;
-		if (relativePath.isFile) {
+		if (PathName(relativePath).isFile) {
 			relativePath = relativePath.dirname;
 		};
 
