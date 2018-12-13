@@ -4,7 +4,7 @@
         author: "scott@artificia.org",
      copyright: "Frank Scott Carver, 2015",
        license: "MIT",
-       version: "1.0.1",
+       version: "1.0.2",
         schelp: "Classes/Require",
           test: "",
            url: "http://github.com/scztt/Require",
