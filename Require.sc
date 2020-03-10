@@ -68,7 +68,7 @@ Require {
 
 		// Don't allow wildcard to be executed in a root directory.
 		if (identifier.contains(thisProcess.platform.pathSeparator).not
-			&& (identifier.contains("?") || identifier.contains("*")) )
+			&& ((identifier.contains("?") || identifier.contains("*"))) )
 		{
 			identifier = "." +/+ identifier;
 		};
