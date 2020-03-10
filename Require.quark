@@ -4,13 +4,13 @@
         author: "scott@artificia.org",
      copyright: "Frank Scott Carver, 2015",
        license: "MIT",
-       version: "1.0.2",
+       version: "1.0.3",
         schelp: "Classes/Require",
           test: "",
            url: "http://github.com/scztt/Require",
-  dependencies: [] ++ ((Main.scVersionMajor <= 3) && (Main.scVersionMinor < 9)).if([
-					"UnitTesting@2a8f5e18aaa7cd25968ec094bbfa75a7fb3094b6"
-				]),
+  dependencies: [
+
+                ],
   isCompatible: true ,
          since: ""
 )
