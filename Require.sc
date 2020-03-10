@@ -45,12 +45,16 @@ Require {
 	}
 
 	*pathMatch {
-		|str|
-		var result = str.pathMatch;
-		^result.select({
-			|path|
-			path.endsWith(".scd");
-		})
+		|str, extensions=(["scd"])|
+		var result = (str ++ ".*").pathMatch ++ str.pathMatch;
+		result = extensions.collectAs({
+			|extension|
+			result.select({
+				|path|
+				path.toLower.endsWith(extension);
+			})
+		}, result.class);
+		^result.flatten(1);
 	}
 
 	*canonicalPath {
