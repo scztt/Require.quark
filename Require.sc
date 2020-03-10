@@ -16,6 +16,8 @@ RequiredFile {
 
 Require {
 	classvar <requireTable;
+	classvar <roots;
+
 
 	*test {
 		UnitTestScript("Require",
@@ -24,6 +26,7 @@ Require {
 
 	*initClass {
 		requireTable = IdentityDictionary();
+		roots = List();
 	}
 
 	*reset {
@@ -63,8 +66,21 @@ Require {
 	}
 
 	*resolvePaths {
-		|identifier, relativeTo|
-		var paths;
+		|identifier, relativeTo=([]), extensions=(["scd"]), attempts|
+		var relativeBase, paths;
+
+		if (relativeTo.isKindOf(Collection).not || relativeTo.isKindOf(String)) {
+			relativeTo = [relativeTo];
+		};
+
+		if (relativeTo.isEmpty) {
+			var currentPath = thisProcess.nowExecutingPath ? "~";
+			currentPath = currentPath.asString;
+			if (PathName(currentPath).isFile) {
+				currentPath = currentPath.dirname;
+			};
+			relativeTo = [currentPath] ++ roots.copy;
+		};
 
 		// Don't allow wildcard to be executed in a root directory.
 		if (identifier.contains(thisProcess.platform.pathSeparator).not
@@ -78,41 +94,63 @@ Require {
 		};
 
 		// First match as if an absolute path
-		paths = this.pathMatch(identifier);
+		attempts.add(identifier);
+		paths = this.pathMatch(identifier, extensions);
 
 		// Then relative
-		if (paths.isEmpty()) {
-			paths = this.pathMatch(this.resolveRelative(identifier, relativeTo));
+		relativeTo = relativeTo.detect {
+			|relativeRoot|
+			var resolved;
+
+			if (paths.isEmpty()) {
+				resolved = this.resolveRelative(identifier, relativeRoot);
+				attempts.add(resolved);
+				paths = this.pathMatch(resolved, extensions);
+			};
+
+			// Then relative with implicit ./
+			if (paths.isEmpty() && (identifier[0] != ".")) {
+				var tempIdentifier = "." +/+ identifier;
+				resolved = this.resolveRelative(tempIdentifier, relativeRoot);
+				attempts.add(resolved);
+				paths = this.pathMatch(resolved, extensions);
+
+				if (paths.notEmpty()) {
+					identifier = tempIdentifier
+				}
+			};
+
+			paths.notEmpty();
 		};
 
-		// Then relative with implicit ./
-		if (paths.isEmpty() && (identifier[0] != ".")) {
-			identifier = "." +/+ identifier;
-			paths = this.pathMatch(this.resolveRelative(identifier, relativeTo));
+		extensions.do {
+			|extension|
+			var itentifierWithExt;
+			// Then relative with implicit extension
+			if (paths.isEmpty() && identifier.toLower.endsWith(extension).not) {
+				itentifierWithExt = identifier ++ "." ++ extension;
+				paths = this.pathMatch(this.resolveRelative(itentifierWithExt, relativeTo), [extension]);
+			};
 		};
 
-		// Then relative with implicit extension
-		if (paths.isEmpty() && identifier.endsWith(".scd").not) {
-			identifier = identifier ++ ".scd";
-			paths = this.pathMatch(this.resolveRelative(identifier, relativeTo));
-		};
-
+		paths = paths.sort();
 		^paths;
 	}
 
 	*require {
 		arg identifier, cmdPeriod = false, always = true;
-		var paths, results, caller;
-		var relativePath = thisProcess.nowExecutingPath ? "~";
-		relativePath = relativePath.asString;
-		if (PathName(relativePath).isFile) {
-			relativePath = relativePath.dirname;
-		};
+		var paths, results, caller, attempts;
 
-		paths = this.resolvePaths(identifier, relativePath);
+		attempts = List();
+		paths = this.resolvePaths(identifier, extensions:["scd"], attempts:attempts);
 
 		if (paths.isEmpty) {
-			Exception("No files found for Require(%)! (executing from: %)".format(identifier, thisProcess.nowExecutingPath).warn).throw;
+			"No files found, attempted paths: ".warn;
+			attempts.do {
+				|a|
+				"\t%".format(*a).warn
+			};
+			Exception("No files found for Require(%)! (executing from: %)".format(identifier, thisProcess.nowExecutingPath)).throw;
 		} {
 			var results = paths.collect({
 				|path|
