@@ -133,7 +133,7 @@ Require {
 			};
 		};
 
-		paths = paths.sort();
+		paths = paths.asSet.asArray.sort();
 		^paths;
 	}
 
