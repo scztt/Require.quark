@@ -54,7 +54,7 @@ Require {
 			|extension|
 			result.select({
 				|path|
-				path.toLower.endsWith(extension);
+                path.toLower.endsWith(extension.toLower);
 			})
 		}, result.class);
 		^result.flatten(1);
@@ -127,7 +127,7 @@ Require {
 			|extension|
 			var itentifierWithExt;
 			// Then relative with implicit extension
-			if (paths.isEmpty() && identifier.toLower.endsWith(extension).not) {
+            if (paths.isEmpty() && identifier.toLower.endsWith(extension.toLower).not) {
 				itentifierWithExt = identifier ++ "." ++ extension;
 				paths = this.pathMatch(this.resolveRelative(itentifierWithExt, relativeTo), [extension]);
 			};
