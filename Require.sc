@@ -142,6 +142,7 @@ Require {
 		var paths, results, caller, attempts;
 
 		attempts = List();
+        identifier = identifier.asString();
 		paths = this.resolvePaths(identifier, extensions:["scd"], attempts:attempts);
 
 		if (paths.isEmpty) {
