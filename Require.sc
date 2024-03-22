@@ -17,7 +17,7 @@ RequiredFile {
 Require {
     classvar <requireTable;
     classvar <roots;
-    
+    classvar rootRequireCall=false;
     
     *test {
         UnitTestScript("Require",
@@ -25,8 +25,9 @@ Require {
     }
     
     *initClass {
-        requireTable = IdentityDictionary();
         roots = List();
+        requireTable = IdentityDictionary();
+        CmdPeriod.add({ this.reset() })
     }
     
     *reset {
@@ -34,7 +35,7 @@ Require {
     }
     
     *new {
-        arg identifier, cmdPeriod = false, always = true;
+        arg identifier, cmdPeriod = false, always = false;
         ^this.require(identifier, cmdPeriod, always);
     }
     
@@ -51,7 +52,7 @@ Require {
     *resolveRelative {
         arg str, relativeTo;
         
-        if (str[0] == thisProcess.platform.pathSeparator) {^str};
+        if (str[0] == thisProcess.platform.pathSeparator) { ^str };
         if (relativeTo.isNil) { ^str }; // It's okay if relativeTo is nil, just always resolve absolutely.
         ^(relativeTo.asString +/+ str)
     }
@@ -74,21 +75,30 @@ Require {
         ^File.realpath(PathName(path).asAbsolutePath().standardizePath).asSymbol();
     }
     
+    *currentPath {
+        var currentPath = thisProcess.nowExecutingPath;
+        if (currentPath.isNil) { ^nil };
+        currentPath = currentPath !? _.asString;
+        if (PathName(currentPath).isFile) {
+            currentPath = currentPath.dirname;
+        };
+        ^currentPath;
+    }
+    
+    *currentPathAndRoots {
+        var paths = roots.copy;
+        this.currentPath !? { |current| paths = paths.insert(0, current) };
+        ^paths;
+    }
+    
     *resolvePaths {
-        |identifier, relativeTo=([]), extensions=(["scd"]), attempts|
+        |identifier, relativeTo, extensions=(["scd"]), attempts|
         var relativeBase, paths;
+        
+        relativeTo ?? { relativeTo = roots.copy };
         
         if (relativeTo.isKindOf(Collection).not || relativeTo.isKindOf(String)) {
             relativeTo = [relativeTo];
-        };
-        
-        if (relativeTo.isEmpty) {
-            var currentPath = thisProcess.nowExecutingPath ? "~";
-            currentPath = currentPath.asString;
-            if (PathName(currentPath).isFile) {
-                currentPath = currentPath.dirname;
-            };
-            relativeTo = [currentPath] ++ roots.copy;
         };
         
         // Don't allow wildcard to be executed in a root directory.        
@@ -144,12 +154,13 @@ Require {
     }
     
     *require {
-        arg identifier, cmdPeriod = false, always = true;
-        var paths, results, caller, attempts;
+        arg identifier, cmdPeriod = false, always = false;
+        var paths, results, caller, attempts, isRoot = false;
         
         attempts = List();
         identifier = identifier.asString();
-        paths = this.resolvePaths(identifier, extensions:["scd"], attempts:attempts);
+        this.currentPath();
+        paths = this.resolvePaths(identifier, this.currentPathAndRoots, extensions:["scd"], attempts:attempts);
         
         if (paths.isEmpty) {
             "No files found, attempted paths: ".warn;
@@ -159,7 +170,16 @@ Require {
             };
             Exception("No files found for Require(%)! (executing from: %)".format(identifier, thisProcess.nowExecutingPath)).throw;
         } {
-            var results = paths.collect({
+            if (rootRequireCall.not) {
+                rootRequireCall = true;
+                thisThread.clock.sched(0, {
+                    // wait for all Require calls to finish, then reset our cache
+                    rootRequireCall = false;
+                    requireTable.clear();
+                })
+            };
+            
+            results = paths.collect({
                 |path|
                 var requiredFile, oldPath, func;
                 
@@ -197,13 +217,13 @@ Require {
                 };
                 
                 requiredFile.result;
-            });
-            
-            if (results.size == 1) {
-                ^results[0];
-            } {
-                ^results;
-            }
+            });                
         };
+        
+        if (results.size == 1) {
+            ^results[0];
+        } {
+            ^results;
+        }
     }
 }

@@ -1,4 +1,4 @@
-~required1_was_run = true;
+~required1_count = ~required1_count + 1;
 
 // return value
 "Required1";
