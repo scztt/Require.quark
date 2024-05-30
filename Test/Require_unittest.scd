@@ -49,31 +49,38 @@
         
         Require.reset();
         ~required1_count = ~required2_count = 0;
-        assertNotIdentical.(
-            Require("Required1", always:true),
-            Require("Required1", always:true),
-            "Duplicate invocations with always return non-identival values");
-        test.assertEquals(~required1_count, 2,
-            "Require was invoked multiple times");
-        
-        Require.reset();
-        ~required1_count = ~required2_count = 0;
         ~required_duplicate = Require("Required1_duplicate");
         assertIdentical.(~required_duplicate[0], ~required_duplicate[1]);
         test.assertEquals(~required1_count, 1);
         
-        // ~required1_count = ~required2_count = false;
-        // "touch \"%\"".format(thisProcess.nowExecutingPath.dirname +/+ "Required1.scd").unixCmdGetStdOut;
-        // "touch \"%\"".format(thisProcess.nowExecutingPath.dirname +/+ "Subdir/Required2.scd").unixCmdGetStdOut;
-        // Require("Required1"); Require("Subdir/Required2");
-        // test.assert(~required1_count && ~required2_count,
-        //     "Require re-runs in case of file update.");
+        Require.reset();
+        test.assert(Require("Cache/Never") != Require("Cache/Never"));
         
-        // ~required1_count = ~required2_count = false;
-        // Require("Required1"); Require("Subdir/Required2");
-        // test.assert(~required1_count.not && ~required2_count.not,
-        //     "New file mod time is properly cached.");
+        Require.reset();
+        ~required1 = Require("Cache/CmdPeriod");
+        ~required1_dup = Require("Cache/CmdPeriod");
+        Require.doOnCmdPeriod();
+        ~required2 = Require("Cache/CmdPeriod");
+        test.assertEquals(~required1, ~required1_dup);
+        test.assert(~required1 != ~required2);
+        
+        Require.reset();
+        ~required1 = Require("Cache/ServerBoot");
+        ~required1_dup = Require("Cache/ServerBoot");
+        Require.doOnServerBoot();
+        ~required2 = Require("Cache/ServerBoot");
+        test.assertEquals(~required1, ~required1_dup);
+        test.assert(~required1 != ~required2);
+        
+        Require.reset();
+        ~required1 = Require("Cache/ServerTree");
+        ~required1_dup = Require("Cache/ServerTree");
+        Require.doOnServerTree();
+        ~required2 = Require("Cache/ServerTree");
+        test.assertEquals(~required1, ~required1_dup);
+        test.assert(~required1 != ~required2);
         
     }, { thisProcess.nowExecutingPath = oldPath })
 }
+
 

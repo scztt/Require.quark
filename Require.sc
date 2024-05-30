@@ -1,23 +1,28 @@
 RequiredFile {
-    var <>path, <>result, <>mtime;
+    var <>path, <>result, <>cacheOn, <>sourceHash;
     
-    *new { |path, result, mtime| ^super.newCopyArgs(path, result, mtime) }
-        
-        == {
-            |other|
-            ^((path == other.path) && (mtime == other.mtime))
-        }
-        
-        != {
-            |other|
-            ^(this == other).not
-        }
+    *new { 
+        |path, result| 
+        ^super.newCopyArgs(path, result, [\evaluate]) 
+    }
+    
+    == {
+        |other|
+        ^((path == other.path) && (sourceHash == other.sourceHash))
+    }
+    
+    != {
+        |other|
+        ^(this == other).not
+    }
 }
 
 Require {
     classvar <requireTable;
     classvar <roots;
     classvar rootRequireCall=false;
+    classvar cacheKeys;
+    classvar setCacheAttribute;
     
     *test {
         UnitTestScript("Require",
@@ -27,16 +32,40 @@ Require {
     *initClass {
         roots = List();
         requireTable = IdentityDictionary();
-        CmdPeriod.add({ this.reset() })
+        CmdPeriod.add(this);
+        ServerTree.add(this);
+        ServerBoot.add(this);
     }
+    
+    *prClearCache {
+        |cacheKey|
+        requireTable = requireTable.reject {
+            |item|
+            item.cacheOn.includes(cacheKey)
+        }        
+    }
+    
+    *doOnCmdPeriod { this.prClearCache(\cmdPeriod) }
+    *doOnServerBoot { this.prClearCache(\serverBoot) }
+    *doOnServerTree { this.prClearCache(\serverTree) }
+    *doOnEvaluate { this.prClearCache(\evaluate) }
     
     *reset {
         requireTable.clear();
     }
     
     *new {
-        arg identifier, cmdPeriod = false, always = false;
-        ^this.require(identifier, cmdPeriod, always);
+        |identifier|
+        ^this.require(identifier);
+    }
+    
+    *with {
+        |...identifiersAndFunc|
+        var func = identifiersAndFunc.removeAt(identifiersAndFunc.size - 1);
+        
+        ^func.value(
+            *identifiersAndFunc.collect(this.require(_))
+        );
     }
     
     *withRoot {
@@ -153,13 +182,72 @@ Require {
         ^paths;
     }
     
+    *prGetSource {
+        |path|
+        ^File.readAllString(path)
+    }
+    
+    *prGetSourceHash {
+        |path|
+        ^this.prGetSource(path).hash
+    }
+    
+    *prDoRequire {
+        |path|
+        var requiredFile, oldPath, func, cacheAttributeWasSet=false, time;
+        
+        requiredFile = RequiredFile();
+        requiredFile.path = this.canonicalPath(path);
+        requiredFile.sourceHash = this.prGetSourceHash(path.asString);
+        
+        requireTable[requiredFile.path] !? {
+            |cached|
+            if (
+                cached.cacheOn.includes(\never) or: {
+                    (cached.cacheOn.includes(\content)) 
+                    and: { cached.sourceHash != requiredFile.sourceHash }
+                }
+            ) {
+                requireTable[requiredFile.path] = nil;
+            }
+        };
+        
+        requireTable[requiredFile.path] !? {
+            |cached|
+            ^cached.result
+        };
+        
+        requireTable[requiredFile.path] = requiredFile;
+        
+        setCacheAttribute = {
+            |...attributes|
+            if (cacheAttributeWasSet) { 
+                "Setting cache attribute twice in one file - the old setting will be lost".warn 
+            };
+            cacheAttributeWasSet = true;
+            requiredFile.cacheOn = IdentitySet.newFrom(attributes);
+        };
+        
+        func = thisProcess.interpreter.compileFile(requiredFile.path.asString);
+        if (func.isNil) { Exception().throw() }; // failed to compile
+        
+        func = func.withPath(requiredFile.path.asString);
+        
+        time = Process.elapsedTime;
+        requiredFile.result = protect(func, {
+            setCacheAttribute = nil;
+        });  
+        // Log(\Require).info("Require(%) - loaded in %s", path, Process.elapsedTime - time);
+        
+        ^requiredFile.result
+    }
+    
     *require {
-        arg identifier, cmdPeriod = false, always = false;
-        var paths, results, caller, attempts, isRoot = false;
+        |identifier|
+        var paths, results, attempts;
+        identifier = identifier.asString();
         
         attempts = List();
-        identifier = identifier.asString();
-        this.currentPath();
         paths = this.resolvePaths(identifier, this.currentPathAndRoots, extensions:["scd"], attempts:attempts);
         
         if (paths.isEmpty) {
@@ -169,56 +257,14 @@ Require {
                 "\t%".format(*a).warn
             };
             Exception("No files found for Require(%)! (executing from: %)".format(identifier, thisProcess.nowExecutingPath)).throw;
-        } {
-            if (rootRequireCall.not) {
-                rootRequireCall = true;
-                thisThread.clock.sched(0, {
-                    // wait for all Require calls to finish, then reset our cache
-                    rootRequireCall = false;
-                    requireTable.clear();
-                })
-            };
-            
-            results = paths.collect({
-                |path|
-                var requiredFile, oldPath, func;
-                
-                requiredFile = RequiredFile();
-                requiredFile.path = this.canonicalPath(path);
-                requiredFile.mtime = File.mtime(requiredFile.path);
-                
-                if (always or: {requireTable[requiredFile.path].isNil or:{ requireTable[requiredFile.path].mtime != requiredFile.mtime}}) {
-                    oldPath = thisProcess.nowExecutingPath;
-                    thisProcess.nowExecutingPath = requiredFile.path.asString;
-                    
-                    protect {
-                        func = thisProcess.interpreter.compileFile(requiredFile.path.asString);
-                        if (func.isNil) { Exception().throw() }; // failed to compile
-                        requiredFile.result = func.value();
-                        requireTable[requiredFile.path] = requiredFile;
-                    } {
-                        |e|
-                        
-                        if (e.notNil) {
-                            "Require of file % failed!".format(requiredFile.path).error;
-                            requireTable[requiredFile.path] = nil;
-                        };
-                        
-                        thisProcess.nowExecutingPath = oldPath;
-                    };
-                    
-                    if (cmdPeriod) {
-                        CmdPeriod.doOnce({
-                            requireTable[requiredFile.path] = nil;
-                        })
-                    }
-                } {
-                    requiredFile = requireTable[requiredFile.path];
-                };
-                
-                requiredFile.result;
-            });                
         };
+        
+        if (rootRequireCall.not) {
+            rootRequireCall = true;
+            this.doOnEvaluate();
+        };
+        
+        results = paths.collect(this.prDoRequire(_));
         
         if (results.size == 1) {
             ^results[0];
@@ -226,4 +272,56 @@ Require {
             ^results;
         }
     }
+    
+    *cache {
+        |...attributes|
+        var allowed = [\content, \serverBoot, \serverTree, \cmdPeriod, \never, \evaluate];
+        var rejected = attributes.copy.difference(allowed);
+        if (rejected.size > 0) {
+            Error("Unknown attributes: % (possible values are: %)".format(rejected, allowed)).throw;
+        };
+        setCacheAttribute.value(*attributes);
+    }
 }
+
++Function {
+    withPath {
+        |path|        
+        ^{
+            var oldPath = thisProcess.nowExecutingPath;
+            thisProcess.nowExecutingPath = path;
+            protect(this, {
+                thisProcess.nowExecutingPath = oldPath
+            })
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
