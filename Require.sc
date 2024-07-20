@@ -63,9 +63,25 @@ Require {
         |...identifiersAndFunc|
         var func = identifiersAndFunc.removeAt(identifiersAndFunc.size - 1);
         
-        ^func.value(
+        ^this.prEvaluateScope({
+            func.value(
             *identifiersAndFunc.collect(this.require(_))
-        );
+            )
+        })
+    }
+    
+    *prEvaluateScope {
+        |func|
+        var resetRootRequireCall = rootRequireCall;
+        
+        if (rootRequireCall.not) {
+            rootRequireCall = true;
+            this.doOnEvaluate();
+        };
+        
+        ^protect(func) {
+            rootRequireCall = resetRootRequireCall;
+        }
     }
     
     *withRoot {
@@ -245,6 +261,7 @@ Require {
     *require {
         |identifier|
         var paths, results, attempts;
+        
         identifier = identifier.asString();
         
         attempts = List();
@@ -259,12 +276,9 @@ Require {
             Exception("No files found for Require(%)! (executing from: %)".format(identifier, thisProcess.nowExecutingPath)).throw;
         };
         
-        if (rootRequireCall.not) {
-            rootRequireCall = true;
-            this.doOnEvaluate();
+        this.prEvaluateScope {
+            results = paths.collect(this.prDoRequire(_, requireDepth - 1));
         };
-        
-        results = paths.collect(this.prDoRequire(_));
         
         if (results.size == 1) {
             ^results[0];
