@@ -23,6 +23,8 @@ Require {
     classvar rootRequireCall=false;
     classvar cacheKeys;
     classvar setCacheAttribute;
+    classvar requireDepth=0;
+    classvar <postRequires=true;
     
     *test {
         UnitTestScript("Require",
@@ -42,7 +44,7 @@ Require {
         requireTable = requireTable.reject {
             |item|
             item.cacheOn.includes(cacheKey)
-        }        
+        }
     }
     
     *doOnCmdPeriod { this.prClearCache(\cmdPeriod) }
@@ -65,7 +67,7 @@ Require {
         
         ^this.prEvaluateScope({
             func.value(
-            *identifiersAndFunc.collect(this.require(_))
+                *identifiersAndFunc.collect(this.require(_))
             )
         })
     }
@@ -208,6 +210,17 @@ Require {
         ^this.prGetSource(path).hash
     }
     
+    *prIndentString {
+        |depth|
+        if (depth == 0) {
+            ^""
+        } {
+            ^(
+                ("  " ! depth).join ++ "└─ "
+            )
+        }
+    }
+    
     *prDoRequire {
         |path|
         var requiredFile, oldPath, func, cacheAttributeWasSet=false, time;
@@ -230,8 +243,23 @@ Require {
         
         requireTable[requiredFile.path] !? {
             |cached|
+            if (postRequires) {
+                "%Require('%') [cached]".format(
+                    this.prIndentString(requireDepth), 
+                    path
+                ).postln;
+            };
             ^cached.result
         };
+        
+        if (postRequires) {
+            "%Require('%')".format(
+                this.prIndentString(requireDepth),
+                path
+            ).postln;        
+        };
+        
+        requireDepth = requireDepth + 1;
         
         requireTable[requiredFile.path] = requiredFile;
         
@@ -252,8 +280,9 @@ Require {
         time = Process.elapsedTime;
         requiredFile.result = protect(func, {
             setCacheAttribute = nil;
-        });  
-        // Log(\Require).info("Require(%) - loaded in %s", path, Process.elapsedTime - time);
+        });
+        
+        requireDepth = requireDepth - 1;
         
         ^requiredFile.result
     }
@@ -310,32 +339,5 @@ Require {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
