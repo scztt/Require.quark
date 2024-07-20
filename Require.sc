@@ -124,7 +124,7 @@ Require {
         |identifier, relativeTo, extensions=(["scd"]), attempts|
         var relativeBase, paths;
         
-        relativeTo ?? { relativeTo = roots.copy };
+        relativeTo = relativeTo ?? { relativeTo = roots.copy };
         
         if (relativeTo.isKindOf(Collection).not || relativeTo.isKindOf(String)) {
             relativeTo = [relativeTo];
