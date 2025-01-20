@@ -20,11 +20,11 @@ RequiredFile {
 Require {
     classvar <requireTable;
     classvar <roots;
-    classvar rootRequireCall=false;
+    classvar <rootRequireCall=false;
     classvar cacheKeys;
     classvar setCacheAttribute;
     classvar requireDepth=0;
-    classvar <postRequires=true;
+    classvar <>postRequires=true;
     
     *test {
         UnitTestScript("Require",
@@ -79,11 +79,12 @@ Require {
         if (rootRequireCall.not) {
             rootRequireCall = true;
             this.doOnEvaluate();
-        };
-        
-        ^protect(func) {
-            rootRequireCall = resetRootRequireCall;
-        }
+            ^func.protect({
+                rootRequireCall = resetRootRequireCall;
+            });
+        } {
+            ^func.value();
+        }   
     }
     
     *withRoot {
